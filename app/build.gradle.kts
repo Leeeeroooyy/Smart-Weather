@@ -7,6 +7,10 @@ plugins {
 android {
     namespace = "com.vadim_zinovev.smartweather"
     compileSdk = 36
+    buildFeatures {
+        buildConfig = true
+        compose = true
+    }
 
     defaultConfig {
         applicationId = "com.vadim_zinovev.smartweather"
@@ -14,6 +18,12 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField(
+            "String",
+            "OPEN_WEATHER_API_KEY",
+            "\"b0e3db975945a19eb5749f670f82bbde\""
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -60,5 +70,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.converter.moshi)
     implementation(libs.moshi.kotlin)
-    implementation(libs.logging.interceptor)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 }
