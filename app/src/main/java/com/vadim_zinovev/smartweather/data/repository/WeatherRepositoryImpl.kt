@@ -5,6 +5,7 @@ import com.vadim_zinovev.smartweather.data.remote.api.WeatherApi
 import com.vadim_zinovev.smartweather.data.remote.dto.toDomainAirQuality
 import com.vadim_zinovev.smartweather.data.remote.dto.toDomainWeather
 import com.vadim_zinovev.smartweather.domain.model.AirQuality
+import com.vadim_zinovev.smartweather.domain.model.TemperatureUnit
 import com.vadim_zinovev.smartweather.domain.model.Weather
 import com.vadim_zinovev.smartweather.domain.repository.WeatherRepository
 
@@ -16,21 +17,25 @@ class WeatherRepositoryImpl(
 
     override suspend fun getCurrentWeatherByCoordinates(
         latitude: Double,
-        longitude: Double
+        longitude: Double,
+        unit: TemperatureUnit
     ): Weather {
         val response = api.getCurrentWeatherByCoordinates(
             latitude = latitude,
             longitude = longitude,
-            units = "metric",
+            units = unit.toApiUnits(),
             apiKey = apiKey
         )
         return response.toDomainWeather()
     }
 
-    override suspend fun getCurrentWeatherByCityName(cityName: String): Weather {
+    override suspend fun getCurrentWeatherByCityName(
+        cityName: String,
+        unit: TemperatureUnit
+    ): Weather {
         val response = api.getCurrentWeatherByCityName(
             cityName = cityName,
-            units = "metric",
+            units = unit.toApiUnits(),
             apiKey = apiKey
         )
         return response.toDomainWeather()
@@ -47,4 +52,10 @@ class WeatherRepositoryImpl(
         )
         return response.toDomainAirQuality()
     }
+
+    private fun TemperatureUnit.toApiUnits(): String =
+        when (this) {
+            TemperatureUnit.CELSIUS -> "metric"
+            TemperatureUnit.FAHRENHEIT -> "imperial"
+        }
 }

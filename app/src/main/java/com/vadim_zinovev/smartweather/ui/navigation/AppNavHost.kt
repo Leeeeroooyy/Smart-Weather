@@ -2,15 +2,17 @@ package com.vadim_zinovev.smartweather.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vadim_zinovev.smartweather.ui.citydetail.CityDetailScreen
 import com.vadim_zinovev.smartweather.ui.citysearch.CitySearchScreen
 import com.vadim_zinovev.smartweather.ui.currentweather.CurrentWeatherScreen
 import com.vadim_zinovev.smartweather.ui.currentweather.CurrentWeatherViewModel
+import com.vadim_zinovev.smartweather.ui.currentweather.CurrentWeatherViewModelFactory
 import com.vadim_zinovev.smartweather.ui.favorites.FavoritesScreen
 import com.vadim_zinovev.smartweather.ui.settings.SettingsScreen
 
@@ -23,7 +25,10 @@ fun AppNavHost(
         startDestination = Screen.CurrentWeather.route
     ) {
         composable(Screen.CurrentWeather.route) { backStackEntry ->
-            val currentWeatherViewModel: CurrentWeatherViewModel = viewModel()
+            val context = LocalContext.current
+            val currentWeatherViewModel: CurrentWeatherViewModel = viewModel(
+                factory = CurrentWeatherViewModelFactory(context)
+            )
 
             val selectedCityName =
                 backStackEntry.savedStateHandle.get<String>("selectedCityName")
@@ -37,9 +42,8 @@ fun AppNavHost(
 
             CurrentWeatherScreen(
                 viewModel = currentWeatherViewModel,
-                onSearchClick = {
-                    navController.navigate(Screen.CitySearch.route)
-                }
+                onSearchClick = { navController.navigate(Screen.CitySearch.route) },
+                onSettingsClick = { navController.navigate(Screen.Settings.route) }
             )
         }
 
@@ -63,7 +67,9 @@ fun AppNavHost(
         }
 
         composable(Screen.CityDetail.route) { backStackEntry ->
-            val cityId = backStackEntry.arguments?.getString("cityId")?.toLongOrNull() ?: -1L
+            val cityId = backStackEntry.arguments
+                ?.getString("cityId")
+                ?.toLongOrNull() ?: -1L
             CityDetailScreen(cityId = cityId)
         }
     }

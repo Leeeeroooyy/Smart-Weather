@@ -12,7 +12,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun CurrentWeatherScreen(
     viewModel: CurrentWeatherViewModel,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val state = viewModel.uiState
 
@@ -24,8 +25,16 @@ fun CurrentWeatherScreen(
         verticalArrangement = Arrangement.Center
     ) {
 
-        Button(onClick = onSearchClick) {
-            Text(text = "Search city")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Button(onClick = onSearchClick) {
+                Text(text = "Search city")
+            }
+
+            Button(onClick = onSettingsClick) {
+                Text(text = "Settings")
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
