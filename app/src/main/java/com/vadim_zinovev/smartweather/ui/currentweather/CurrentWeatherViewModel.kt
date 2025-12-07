@@ -24,20 +24,50 @@ class CurrentWeatherViewModel(
     private var currentUnit: TemperatureUnit = TemperatureUnit.CELSIUS
     private var reloadJob: Job? = null
 
+    private enum class Source {
+        NONE, CITY_NAME, COORDINATES
+    }
+
+    private var lastSource: Source = Source.NONE
+    private var lastCityName: String? = null
+    private var lastLat: Double? = null
+    private var lastLon: Double? = null
+
     init {
-        // слушаем изменения единиц температуры
         viewModelScope.launch {
             settingsRepository.observeTemperatureUnit().collect { unit ->
                 currentUnit = unit
-                val city = uiState.cityName ?: "Zlin"
-                val isFirstLoad = uiState.temperatureText == null
-                reloadWeather(city, showLoader = isFirstLoad)
+                if (lastSource != Source.NONE && uiState.temperatureText != null) {
+                    reloadWithLastSource(showLoader = true)
+                }
             }
         }
+
+        loadWeatherForCityCoordinates(
+            cityName = "Prague",
+            latitude = 50.0755,
+            longitude = 14.4378
+        )
     }
 
     fun loadWeatherForCity(cityName: String) {
-        reloadWeather(cityName, showLoader = true)
+        lastSource = Source.CITY_NAME
+        lastCityName = cityName
+        lastLat = null
+        lastLon = null
+        reloadWithLastSource(showLoader = true)
+    }
+
+    fun loadWeatherForCityCoordinates(
+        cityName: String,
+        latitude: Double,
+        longitude: Double
+    ) {
+        lastSource = Source.COORDINATES
+        lastCityName = cityName
+        lastLat = latitude
+        lastLon = longitude
+        reloadWithLastSource(showLoader = true)
     }
 
     fun loadWeatherForCurrentLocation() {
@@ -51,20 +81,16 @@ class CurrentWeatherViewModel(
                 val location = locationProvider.getCurrentLocation()
                     ?: throw IllegalStateException("Location not available")
 
-                val weather = weatherRepository.getCurrentWeatherByCoordinates(
+                lastSource = Source.COORDINATES
+                lastCityName = "My location"
+                lastLat = location.latitude
+                lastLon = location.longitude
+
+                reloadWeatherByCoordinates(
+                    cityName = "My location",
                     latitude = location.latitude,
                     longitude = location.longitude,
-                    unit = currentUnit
-                )
-
-                val unitSymbol = if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
-
-                uiState = CurrentWeatherUiState(
-                    isLoading = false,
-                    cityName = "My location",
-                    temperatureText = "${weather.temperature.toInt()}$unitSymbol",
-                    description = weather.description,
-                    errorMessage = null
+                    showLoader = false
                 )
             } catch (e: SecurityException) {
                 uiState = uiState.copy(
@@ -80,7 +106,28 @@ class CurrentWeatherViewModel(
         }
     }
 
-    private fun reloadWeather(city: String, showLoader: Boolean) {
+    private fun reloadWithLastSource(showLoader: Boolean) {
+        when (lastSource) {
+            Source.CITY_NAME -> {
+                val city = lastCityName ?: return
+                reloadWeatherByCityName(city, showLoader)
+            }
+
+            Source.COORDINATES -> {
+                val city = lastCityName ?: return
+                val lat = lastLat ?: return
+                val lon = lastLon ?: return
+                reloadWeatherByCoordinates(city, lat, lon, showLoader)
+            }
+
+            Source.NONE -> Unit
+        }
+    }
+
+    private fun reloadWeatherByCityName(
+        city: String,
+        showLoader: Boolean
+    ) {
         reloadJob?.cancel()
         reloadJob = viewModelScope.launch {
             if (showLoader) {
@@ -93,11 +140,13 @@ class CurrentWeatherViewModel(
                 val weather = weatherRepository.getCurrentWeatherByCityName(city, currentUnit)
                 val unitSymbol = if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
 
-                uiState = CurrentWeatherUiState(
+                uiState = uiState.copy(
                     isLoading = false,
                     cityName = city,
                     temperatureText = "${weather.temperature.toInt()}$unitSymbol",
                     description = weather.description,
+                    airQualityIndex = null,
+                    airQualityText = null,
                     errorMessage = null
                 )
             } catch (e: Exception) {
@@ -108,4 +157,60 @@ class CurrentWeatherViewModel(
             }
         }
     }
+
+    private fun reloadWeatherByCoordinates(
+        cityName: String,
+        latitude: Double,
+        longitude: Double,
+        showLoader: Boolean
+    ) {
+        reloadJob?.cancel()
+        reloadJob = viewModelScope.launch {
+            if (showLoader) {
+                uiState = uiState.copy(
+                    isLoading = true,
+                    errorMessage = null
+                )
+            }
+            try {
+                val weather = weatherRepository.getCurrentWeatherByCoordinates(
+                    latitude = latitude,
+                    longitude = longitude,
+                    unit = currentUnit
+                )
+
+                val airQuality = weatherRepository.getAirQualityByCoordinates(
+                    latitude = latitude,
+                    longitude = longitude
+                )
+
+                val unitSymbol = if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
+
+                uiState = uiState.copy(
+                    isLoading = false,
+                    cityName = cityName,
+                    temperatureText = "${weather.temperature.toInt()}$unitSymbol",
+                    description = weather.description,
+                    airQualityIndex = airQuality?.aqi,
+                    airQualityText = airQuality?.aqi?.let { indexToText(it) },
+                    errorMessage = null
+                )
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Failed to load weather"
+                )
+            }
+        }
+    }
+
+    private fun indexToText(index: Int): String =
+        when (index) {
+            1 -> "Good"
+            2 -> "Fair"
+            3 -> "Moderate"
+            4 -> "Poor"
+            5 -> "Very poor"
+            else -> "Unknown"
+        }
 }

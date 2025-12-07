@@ -21,16 +21,20 @@ fun CurrentWeatherResponseDto.toDomainWeather(): Weather {
 }
 
 fun AirQualityResponseDto.toDomainAirQuality(): AirQuality? {
-    val first = list.firstOrNull() ?: return null
+    val item = list.firstOrNull() ?: return null
+    val aqiValue = item.main.aqi
+
     return AirQuality(
-        aqi = first.main.aqi,
-        pm25 = first.components.pm25,
-        pm10 = first.components.pm10
+        index = aqiValue,
+        aqi = aqiValue,
+        pm25 = item.components.pm25,
+        pm10 = item.components.pm10,
+        o3 = item.components.o3
     )
 }
 
 fun CityGeocodingDto.toDomainCity(
-    id: Long = 0L,        // потом заменить на id из БД
+    id: Long = 0L,
     isFavorite: Boolean = false
 ): City = City(
     id = id,

@@ -97,6 +97,12 @@ fun CurrentWeatherScreen(
                     Text(text = state.cityName ?: "")
                     Text(text = state.temperatureText)
                     Text(text = state.description ?: "")
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (state.airQualityIndex != null && state.airQualityText != null) {
+                        Text(text = "Air quality: ${state.airQualityText} (AQI ${state.airQualityIndex})")
+                    }
                 }
             }
 

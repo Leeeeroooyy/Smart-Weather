@@ -18,7 +18,7 @@ import com.vadim_zinovev.smartweather.domain.model.City
 
 @Composable
 fun CitySearchScreen(
-    onCitySelected: (String) -> Unit,
+    onCitySelected: (City) -> Unit,
     viewModel: CitySearchViewModel = viewModel()
 ) {
     val state = viewModel.uiState
@@ -70,7 +70,7 @@ fun CitySearchScreen(
                     itemsIndexed(state.results) { index, city ->
                         CityListItem(
                             city = city,
-                            onClick = { onCitySelected(city.name) }
+                            onClick = { onCitySelected(city) }
                         )
 
                         if (index < state.results.lastIndex) {
@@ -104,7 +104,6 @@ private fun CityListItem(
 
         Column {
             Text(text = "${city.name}, ${city.country}")
-
         }
     }
 }

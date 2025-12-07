@@ -32,27 +32,45 @@ fun AppNavHost(
 
             val selectedCityName =
                 backStackEntry.savedStateHandle.get<String>("selectedCityName")
+            val selectedLat =
+                backStackEntry.savedStateHandle.get<Double>("selectedLat")
+            val selectedLon =
+                backStackEntry.savedStateHandle.get<Double>("selectedLon")
 
-            if (selectedCityName != null) {
-                LaunchedEffect(selectedCityName) {
-                    currentWeatherViewModel.loadWeatherForCity(selectedCityName)
+            if (selectedCityName != null && selectedLat != null && selectedLon != null) {
+                LaunchedEffect(selectedCityName, selectedLat, selectedLon) {
+                    currentWeatherViewModel.loadWeatherForCityCoordinates(
+                        cityName = selectedCityName,
+                        latitude = selectedLat,
+                        longitude = selectedLon
+                    )
                     backStackEntry.savedStateHandle["selectedCityName"] = null
+                    backStackEntry.savedStateHandle["selectedLat"] = null
+                    backStackEntry.savedStateHandle["selectedLon"] = null
                 }
             }
 
             CurrentWeatherScreen(
                 viewModel = currentWeatherViewModel,
-                onSearchClick = { navController.navigate(Screen.CitySearch.route) },
-                onSettingsClick = { navController.navigate(Screen.Settings.route) }
+                onSearchClick = {
+                    navController.navigate(Screen.CitySearch.route)
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
+                }
             )
         }
 
         composable(Screen.CitySearch.route) {
             CitySearchScreen(
-                onCitySelected = { cityName ->
+                onCitySelected = { city ->
                     navController.previousBackStackEntry
                         ?.savedStateHandle
-                        ?.set("selectedCityName", cityName)
+                        ?.apply {
+                            set("selectedCityName", city.name)
+                            set("selectedLat", city.latitude)
+                            set("selectedLon", city.longitude)
+                        }
                     navController.popBackStack()
                 }
             )
