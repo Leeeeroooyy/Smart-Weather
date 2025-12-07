@@ -16,7 +16,9 @@ fun CurrentWeatherResponseDto.toDomainWeather(): Weather {
         humidity = main.humidity,
         pressure = main.pressure,
         windSpeed = wind.speed,
-        timestamp = timestamp
+        timestamp = timestamp,
+        latitude = coord.lat,
+        longitude = coord.lon
     )
 }
 

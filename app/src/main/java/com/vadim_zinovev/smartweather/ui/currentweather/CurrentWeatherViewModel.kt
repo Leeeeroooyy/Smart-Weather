@@ -24,9 +24,7 @@ class CurrentWeatherViewModel(
     private var currentUnit: TemperatureUnit = TemperatureUnit.CELSIUS
     private var reloadJob: Job? = null
 
-    private enum class Source {
-        NONE, CITY_NAME, COORDINATES
-    }
+    private enum class Source { NONE, CITY_NAME, COORDINATES }
 
     private var lastSource: Source = Source.NONE
     private var lastCityName: String? = null
@@ -77,6 +75,7 @@ class CurrentWeatherViewModel(
                 isLoading = true,
                 errorMessage = null
             )
+
             try {
                 val location = locationProvider.getCurrentLocation()
                     ?: throw IllegalStateException("Location not available")
@@ -136,17 +135,28 @@ class CurrentWeatherViewModel(
                     errorMessage = null
                 )
             }
+
             try {
-                val weather = weatherRepository.getCurrentWeatherByCityName(city, currentUnit)
-                val unitSymbol = if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
+                val weather = weatherRepository.getCurrentWeatherByCityName(
+                    cityName = city,
+                    unit = currentUnit
+                )
+
+                val airQuality = weatherRepository.getAirQualityByCoordinates(
+                    latitude = weather.latitude,
+                    longitude = weather.longitude
+                )
+
+                val unitSymbol =
+                    if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
 
                 uiState = uiState.copy(
                     isLoading = false,
                     cityName = city,
                     temperatureText = "${weather.temperature.toInt()}$unitSymbol",
                     description = weather.description,
-                    airQualityIndex = null,
-                    airQualityText = null,
+                    airQualityIndex = airQuality?.aqi,
+                    airQualityText = airQuality?.aqi?.let { indexToText(it) },
                     errorMessage = null
                 )
             } catch (e: Exception) {
@@ -172,6 +182,7 @@ class CurrentWeatherViewModel(
                     errorMessage = null
                 )
             }
+
             try {
                 val weather = weatherRepository.getCurrentWeatherByCoordinates(
                     latitude = latitude,
@@ -184,7 +195,8 @@ class CurrentWeatherViewModel(
                     longitude = longitude
                 )
 
-                val unitSymbol = if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
+                val unitSymbol =
+                    if (currentUnit == TemperatureUnit.CELSIUS) "°C" else "°F"
 
                 uiState = uiState.copy(
                     isLoading = false,

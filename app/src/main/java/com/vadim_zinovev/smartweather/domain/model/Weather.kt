@@ -10,5 +10,7 @@ data class Weather(
     val humidity: Int,
     val pressure: Int,
     val windSpeed: Double,
-    val timestamp: Long
+    val timestamp: Long,
+    val latitude: Double,
+    val longitude: Double
 )
