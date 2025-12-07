@@ -50,6 +50,7 @@ fun AppNavHost(
                 backStackEntry.savedStateHandle.get<Double>("selectedLat")
             val selectedLon =
                 backStackEntry.savedStateHandle.get<Double>("selectedLon")
+
             if (selectedCityName != null && selectedLat != null && selectedLon != null) {
                 LaunchedEffect(selectedCityName, selectedLat, selectedLon) {
                     currentWeatherViewModel.loadWeatherForCityCoordinates(
@@ -61,8 +62,7 @@ fun AppNavHost(
                     backStackEntry.savedStateHandle["selectedLat"] = null
                     backStackEntry.savedStateHandle["selectedLon"] = null
                 }
-            }
-            else if (selectedCityName != null) {
+            } else if (selectedCityName != null) {
                 LaunchedEffect(selectedCityName) {
                     currentWeatherViewModel.loadWeatherForCity(selectedCityName)
                     backStackEntry.savedStateHandle["selectedCityName"] = null
@@ -77,11 +77,15 @@ fun AppNavHost(
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
                 },
+                onMyLocationClick = {
+                    currentWeatherViewModel.loadWeatherForCurrentLocation()
+                },
                 onFavoritesClick = {
                     navController.navigate(Screen.Favorites.route)
                 }
             )
         }
+
         composable(Screen.CitySearch.route) {
             CitySearchScreen(
                 onCitySelected = { city ->
@@ -107,7 +111,6 @@ fun AppNavHost(
 
             CitySearchScreen(
                 onCitySelected = { city ->
-                    // 1) Add to favorites
                     scope.launch {
                         favoritesStorage.toggleCity(city.name)
                     }
