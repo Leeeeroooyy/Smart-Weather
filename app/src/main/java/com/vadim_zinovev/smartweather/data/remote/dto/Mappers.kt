@@ -18,7 +18,8 @@ fun CurrentWeatherResponseDto.toDomainWeather(): Weather {
         windSpeed = wind.speed,
         timestamp = timestamp,
         latitude = coord.lat,
-        longitude = coord.lon
+        longitude = coord.lon,
+        cityName = name
     )
 }
 

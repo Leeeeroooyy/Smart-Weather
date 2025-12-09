@@ -20,12 +20,4 @@ class CityRepositoryImpl(
         )
         return result.map { it.toDomainCity() }
     }
-
-    override suspend fun getFavoriteCities(): List<City> = emptyList()
-
-    override suspend fun addFavoriteCity(city: City) {
-    }
-
-    override suspend fun removeFavoriteCity(cityId: Long) {
-    }
 }

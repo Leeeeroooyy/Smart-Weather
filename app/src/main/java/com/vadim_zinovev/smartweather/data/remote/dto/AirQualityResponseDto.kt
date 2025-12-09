@@ -2,7 +2,6 @@ package com.vadim_zinovev.smartweather.data.remote.dto
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
-import com.vadim_zinovev.smartweather.domain.model.AirQuality
 
 @JsonClass(generateAdapter = true)
 data class AirQualityResponseDto(

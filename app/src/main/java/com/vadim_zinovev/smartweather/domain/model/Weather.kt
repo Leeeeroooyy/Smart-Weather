@@ -12,5 +12,6 @@ data class Weather(
     val windSpeed: Double,
     val timestamp: Long,
     val latitude: Double,
-    val longitude: Double
+    val longitude: Double,
+    val cityName: String?
 )

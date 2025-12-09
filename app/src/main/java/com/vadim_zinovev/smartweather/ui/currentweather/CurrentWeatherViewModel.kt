@@ -41,11 +41,7 @@ class CurrentWeatherViewModel(
             }
         }
 
-        loadWeatherForCityCoordinates(
-            cityName = "Prague",
-            latitude = 50.0755,
-            longitude = 14.4378
-        )
+        loadWeatherForCurrentLocation()
     }
 
     fun loadWeatherForCity(cityName: String) {
@@ -62,7 +58,7 @@ class CurrentWeatherViewModel(
         longitude: Double
     ) {
         lastSource = Source.COORDINATES
-        lastCityName = cityName
+        lastCityName = cityName        // метка на случай, если name из API пустой
         lastLat = latitude
         lastLon = longitude
         reloadWithLastSource(showLoader = true)
@@ -84,21 +80,17 @@ class CurrentWeatherViewModel(
                 val longitude = location.longitude
 
                 lastSource = Source.COORDINATES
-                lastCityName = "My location"
                 lastLat = latitude
                 lastLon = longitude
+                lastCityName = null
 
                 reloadWeatherByCoordinates(
-                    cityName = "My location",
                     latitude = latitude,
                     longitude = longitude,
                     showLoader = false
                 )
             } catch (e: SecurityException) {
-                uiState = uiState.copy(
-                    isLoading = false,
-                    errorMessage = "Location permission is required"
-                )
+                loadWeatherForCity("Prague")
             } catch (e: Exception) {
                 uiState = uiState.copy(
                     isLoading = false,
@@ -114,14 +106,11 @@ class CurrentWeatherViewModel(
                 val city = lastCityName ?: return
                 reloadWeatherByCityName(city, showLoader)
             }
-
             Source.COORDINATES -> {
-                val city = lastCityName ?: return
                 val lat = lastLat ?: return
                 val lon = lastLon ?: return
-                reloadWeatherByCoordinates(city, lat, lon, showLoader)
+                reloadWeatherByCoordinates(lat, lon, showLoader)
             }
-
             Source.NONE -> Unit
         }
     }
@@ -167,7 +156,7 @@ class CurrentWeatherViewModel(
 
                 uiState = uiState.copy(
                     isLoading = false,
-                    cityName = city,
+                    cityName = weather.cityName ?: city,   // 👈 сначала из API, потом введённое
                     temperatureText = "${weather.temperature.toInt()}$unitSymbol",
                     description = weather.description,
                     airQualityIndex = airQuality?.aqi,
@@ -191,7 +180,6 @@ class CurrentWeatherViewModel(
     }
 
     private fun reloadWeatherByCoordinates(
-        cityName: String,
         latitude: Double,
         longitude: Double,
         showLoader: Boolean
@@ -234,7 +222,9 @@ class CurrentWeatherViewModel(
 
                 uiState = uiState.copy(
                     isLoading = false,
-                    cityName = cityName,
+                    cityName = weather.cityName       // 👈 главное: берём название города из API
+                        ?: lastCityName              // если вдруг null — используем последнее
+                        ?: uiState.cityName,         // или оставляем старое
                     temperatureText = "${weather.temperature.toInt()}$unitSymbol",
                     description = weather.description,
                     airQualityIndex = airQuality?.aqi,

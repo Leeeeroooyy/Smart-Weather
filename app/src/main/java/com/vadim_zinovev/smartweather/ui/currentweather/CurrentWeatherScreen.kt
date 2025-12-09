@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.vadim_zinovev.smartweather.data.local.FavoritesStorage
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -68,23 +71,43 @@ fun CurrentWeatherScreen(
 
     val pagerState = rememberPagerState(
         initialPage = 0,
-        pageCount = { max(favoriteCities.size, 1) }
+        pageCount = {
+            val favoritesCount = favoriteCities.size
+            max(favoritesCount + 1, 1)
+        }
     )
 
-    var lastPage by remember { mutableStateOf(pagerState.currentPage) }
+    val scope = rememberCoroutineScope()
+    var mainWeatherState by remember { mutableStateOf<CurrentWeatherUiState?>(null) }
 
-    LaunchedEffect(pagerState.currentPage, favoriteCities) {
-        if (favoriteCities.isEmpty()) return@LaunchedEffect
-
-        if (pagerState.currentPage != lastPage) {
-            lastPage = pagerState.currentPage
-            val city = favoriteCities.getOrNull(pagerState.currentPage) ?: return@LaunchedEffect
-            viewModel.loadWeatherForCity(city)
+    LaunchedEffect(state) {
+        if (pagerState.currentPage == 0 &&
+            !state.isLoading &&
+            state.errorMessage == null &&
+            state.temperatureText != null
+        ) {
+            mainWeatherState = state
         }
     }
 
-    var menuExpanded by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    LaunchedEffect(favoriteCities, pagerState) {
+        if (favoriteCities.isEmpty()) return@LaunchedEffect
+
+        var isFirstEmission = true
+
+        snapshotFlow { pagerState.currentPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                if (isFirstEmission) {
+                    isFirstEmission = false
+                    return@collect
+                }
+                if (page == 0) return@collect
+                val favoriteIndex = page - 1
+                val city = favoriteCities.getOrNull(favoriteIndex) ?: return@collect
+                viewModel.loadWeatherForCity(city)
+            }
+    }
 
     Box(
         modifier = Modifier
@@ -103,184 +126,230 @@ fun CurrentWeatherScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box {
-                    SmallFloatingActionButton(
-                        onClick = { menuExpanded = true },
-                        containerColor = Color(0xFF003B66),
-                        contentColor = Color.White
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu"
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Search city") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onSearchClick()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Favorites") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onFavoritesClick()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onSettingsClick()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("My location") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onMyLocationClick()
-                            }
-                        )
+            CurrentWeatherTopBar(
+                onSearchClick = onSearchClick,
+                onFavoritesClick = onFavoritesClick,
+                onSettingsClick = onSettingsClick,
+                onMyLocationClick = onMyLocationClick,
+                onHomeClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(0)
                     }
                 }
-
-                SmallFloatingActionButton(
-                    onClick = {
-                        if (favoriteCities.isNotEmpty()) {
-                            scope.launch {
-                                pagerState.animateScrollToPage(0)
-                            }
-                        }
-                    },
-                    containerColor = Color(0xFF003B66),
-                    contentColor = Color.White
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Home,
-                        contentDescription = "Home"
-                    )
-                }
-            }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            when {
-                state.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color.White)
-                    }
-                }
-
-                state.errorMessage != null -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Error: ${state.errorMessage}",
-                            color = Color.White
-                        )
-                    }
-                }
-
-                state.temperatureText != null -> {
-                    if (favoriteCities.isNotEmpty()) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize()
-                        ) { _ ->
-                            WeatherCardContent(
-                                state = state,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    } else {
-                        WeatherCardContent(
-                            state = state,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                else -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No data",
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-
-            if (favoriteCities.size > 1 &&
-                !state.isLoading &&
-                state.errorMessage == null &&
-                state.temperatureText != null
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    repeat(favoriteCities.size) { index ->
-                        val selected = pagerState.currentPage == index
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 4.dp)
-                                .size(if (selected) 10.dp else 8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selected) Color.White
-                                    else Color.White.copy(alpha = 0.4f)
-                                )
-                        )
-                    }
-                }
+                CurrentWeatherStateContent(
+                    state = state,
+                    mainWeatherState = mainWeatherState,
+                    pagerState = pagerState
+                )
             }
+            if (!state.isLoading &&
+                state.errorMessage == null &&
+                state.temperatureText != null &&
+                pagerState.pageCount > 1
+            ) {
+                FavoriteCitiesPagerIndicator(
+                    pageCount = pagerState.pageCount,
+                    currentPage = pagerState.currentPage
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentWeatherTopBar(
+    onSearchClick: () -> Unit,
+    onFavoritesClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onMyLocationClick: () -> Unit,
+    onHomeClick: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box {
+            SmallFloatingActionButton(
+                onClick = { menuExpanded = true },
+                containerColor = Color(0xFF003B66),
+                contentColor = Color.White
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menu"
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Search city") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onSearchClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Favorites") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onFavoritesClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Settings") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onSettingsClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("My location") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onMyLocationClick()
+                    }
+                )
+            }
+        }
+
+        SmallFloatingActionButton(
+            onClick = onHomeClick,
+            containerColor = Color(0xFF003B66),
+            contentColor = Color.White
+        ) {
+            Icon(
+                imageVector = Icons.Default.Home,
+                contentDescription = "Home"
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CurrentWeatherStateContent(
+    state: CurrentWeatherUiState,
+    mainWeatherState: CurrentWeatherUiState?,
+    pagerState: PagerState
+) {
+    when {
+        state.isLoading && mainWeatherState == null -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        }
+
+        state.errorMessage != null && mainWeatherState == null -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Error: ${state.errorMessage}",
+                    color = Color.White
+                )
+            }
+        }
+
+        state.temperatureText != null || mainWeatherState?.temperatureText != null -> {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val contentState =
+                    if (page == 0) {
+                        mainWeatherState ?: state
+                    } else {
+                        state
+                    }
+
+                WeatherCardContent(
+                    state = contentState,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        else -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No data",
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteCitiesPagerIndicator(
+    pageCount: Int,
+    currentPage: Int
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        repeat(pageCount) { index ->
+            val selected = currentPage == index
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .size(if (selected) 10.dp else 8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) Color.White
+                        else Color.White.copy(alpha = 0.4f)
+                    )
+            )
         }
     }
 }
