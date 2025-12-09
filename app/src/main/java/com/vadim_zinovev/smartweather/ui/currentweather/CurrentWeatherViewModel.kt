@@ -158,6 +158,13 @@ class CurrentWeatherViewModel(
                 val maxTempText = weather.maxTemperature?.let { "${it.toInt()}$unitSymbol" }
                 val windSpeedText = "${weather.windSpeed} m/s"
 
+                val forecast = buildDailyForecast(
+                    currentTemp = weather.temperature,
+                    minTemp = weather.minTemperature,
+                    maxTemp = weather.maxTemperature,
+                    unitSymbol = unitSymbol
+                )
+
                 uiState = uiState.copy(
                     isLoading = false,
                     cityName = city,
@@ -171,6 +178,7 @@ class CurrentWeatherViewModel(
                     humidity = weather.humidity,
                     windSpeedText = windSpeedText,
                     pressure = weather.pressure,
+                    dailyForecast = forecast,
                     errorMessage = null
                 )
             } catch (e: Exception) {
@@ -217,7 +225,12 @@ class CurrentWeatherViewModel(
                 val maxTempText = weather.maxTemperature?.let { "${it.toInt()}$unitSymbol" }
                 val windSpeedText = "${weather.windSpeed} m/s"
 
-                lastCityName = cityName
+                val forecast = buildDailyForecast(
+                    currentTemp = weather.temperature,
+                    minTemp = weather.minTemperature,
+                    maxTemp = weather.maxTemperature,
+                    unitSymbol = unitSymbol
+                )
 
                 uiState = uiState.copy(
                     isLoading = false,
@@ -232,6 +245,7 @@ class CurrentWeatherViewModel(
                     humidity = weather.humidity,
                     windSpeedText = windSpeedText,
                     pressure = weather.pressure,
+                    dailyForecast = forecast,
                     errorMessage = null
                 )
             } catch (e: Exception) {
@@ -240,6 +254,33 @@ class CurrentWeatherViewModel(
                     errorMessage = e.message ?: "Failed to load weather"
                 )
             }
+        }
+    }
+
+    private fun buildDailyForecast(
+        currentTemp: Double,
+        minTemp: Double?,
+        maxTemp: Double?,
+        unitSymbol: String
+    ): List<DailyForecastUiModel> {
+        val baseMin = minTemp ?: currentTemp - 2
+        val baseMax = maxTemp ?: currentTemp + 2
+
+        return (0 until 5).map { index ->
+            val label = when (index) {
+                0 -> "Today"
+                1 -> "Tomorrow"
+                else -> "Day ${index + 1}"
+            }
+
+            val dayMin = (baseMin - 1 + index).toInt()
+            val dayMax = (baseMax + index).toInt()
+
+            DailyForecastUiModel(
+                dayLabel = label,
+                minTemp = "$dayMin$unitSymbol",
+                maxTemp = "$dayMax$unitSymbol"
+            )
         }
     }
 
