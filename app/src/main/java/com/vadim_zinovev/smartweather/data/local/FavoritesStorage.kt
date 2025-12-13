@@ -1,50 +1,61 @@
 package com.vadim_zinovev.smartweather.data.local
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-val Context.favoritesDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "favorite_cities"
-)
+private val Context.favoritesDataStore by preferencesDataStore(name = "favorites_store")
 
-class FavoritesStorage(
-    private val context: Context
-) {
-    private val FAVORITE_CITIES_KEY = stringSetPreferencesKey("favorite_cities")
+class FavoritesStorage(private val context: Context) {
 
-    val favoriteCities: Flow<List<String>> =
-        context.favoritesDataStore.data.map { prefs ->
-            prefs[FAVORITE_CITIES_KEY]?.toList() ?: emptyList()
-        }
+    private val keyFavorites = stringPreferencesKey("favorite_cities_v2")
 
-    suspend fun toggleCity(cityName: String) {
+    val favoriteCityKeys: Flow<List<String>> = context.favoritesDataStore.data.map { prefs ->
+        prefs[keyFavorites]
+            ?.split("\n")
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+    }
+
+    val favoriteCities: Flow<List<FavoriteCity>> = favoriteCityKeys.map { keys ->
+        keys.mapNotNull { FavoriteCity.fromKey(it) }
+    }
+
+    suspend fun add(city: FavoriteCity) {
         context.favoritesDataStore.edit { prefs ->
-            val current = prefs[FAVORITE_CITIES_KEY] ?: emptySet()
-            prefs[FAVORITE_CITIES_KEY] =
-                if (current.contains(cityName)) {
-                    current - cityName
-                } else {
-                    current + cityName
-                }
+            val current = prefs[keyFavorites]
+                ?.split("\n")
+                ?.filter { it.isNotBlank() }
+                ?.toMutableList()
+                ?: mutableListOf()
+
+            val k = city.key
+            if (!current.contains(k)) {
+                current.add(k)
+                prefs[keyFavorites] = current.joinToString("\n")
+            }
         }
     }
 
-    suspend fun removeCity(cityName: String) {
+    suspend fun remove(cityKey: String) {
         context.favoritesDataStore.edit { prefs ->
-            val current = prefs[FAVORITE_CITIES_KEY] ?: emptySet()
-            prefs[FAVORITE_CITIES_KEY] = current - cityName
+            val current = prefs[keyFavorites]
+                ?.split("\n")
+                ?.filter { it.isNotBlank() }
+                ?.toMutableList()
+                ?: mutableListOf()
+
+            current.removeAll { it == cityKey }
+            prefs[keyFavorites] = current.joinToString("\n")
         }
     }
 
-    suspend fun isFavorite(cityName: String): Boolean {
-        val current = context.favoritesDataStore.data.first()[FAVORITE_CITIES_KEY] ?: emptySet()
-        return current.contains(cityName)
+    suspend fun clear() {
+        context.favoritesDataStore.edit { prefs ->
+            prefs.remove(keyFavorites)
+        }
     }
 }

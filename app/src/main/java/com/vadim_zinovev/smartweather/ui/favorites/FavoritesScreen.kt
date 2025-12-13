@@ -1,14 +1,19 @@
 package com.vadim_zinovev.smartweather.ui.favorites
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -16,20 +21,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.vadim_zinovev.smartweather.data.local.FavoriteCity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
-    onCitySelected: (String) -> Unit,
+    onCitySelected: (FavoriteCity) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -39,7 +42,6 @@ fun FavoritesScreen(
     )
 
     val favorites by viewModel.favoriteCities.collectAsState()
-    var newCityName by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -63,28 +65,6 @@ fun FavoritesScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = newCityName,
-                onValueChange = { newCityName = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Add city manually") },
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    val city = newCityName.trim()
-                    if (city.isNotEmpty()) {
-                        viewModel.onToggleFavorite(city)
-                        newCityName = ""
-                    }
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("Add to favorites")
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             if (favorites.isEmpty()) {
@@ -96,11 +76,11 @@ fun FavoritesScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(favorites) { cityName ->
+                    items(favorites, key = { it.key }) { city ->
                         FavoriteCityRow(
-                            cityName = cityName,
-                            onClick = { onCitySelected(cityName) },
-                            onRemoveClick = { viewModel.onRemoveCity(cityName) }
+                            cityTitle = city.title,
+                            onClick = { onCitySelected(city) },
+                            onRemoveClick = { viewModel.onRemoveCity(city.key) }
                         )
                         Divider()
                     }
@@ -112,7 +92,7 @@ fun FavoritesScreen(
 
 @Composable
 private fun FavoriteCityRow(
-    cityName: String,
+    cityTitle: String,
     onClick: () -> Unit,
     onRemoveClick: () -> Unit
 ) {
@@ -125,7 +105,7 @@ private fun FavoriteCityRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = cityName,
+            text = cityTitle,
             style = MaterialTheme.typography.bodyLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

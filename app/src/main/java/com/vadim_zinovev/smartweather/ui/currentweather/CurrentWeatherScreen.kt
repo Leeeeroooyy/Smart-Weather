@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.vadim_zinovev.smartweather.R
+import com.vadim_zinovev.smartweather.data.local.FavoriteCity
 import com.vadim_zinovev.smartweather.data.local.FavoritesStorage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -85,6 +87,7 @@ fun CurrentWeatherScreen(
 
     val favoritesStorage = remember { FavoritesStorage(context.applicationContext) }
     val favoriteCities by favoritesStorage.favoriteCities.collectAsState(initial = emptyList())
+    val favoriteKeys = remember(favoriteCities) { favoriteCities.map { it.key } }
 
     val pagerState = rememberPagerState(
         initialPage = 0,
@@ -95,14 +98,34 @@ fun CurrentWeatherScreen(
     val scope = rememberCoroutineScope()
 
     var mainWeatherState by remember { mutableStateOf<CurrentWeatherUiState?>(null) }
+    val cachedFavoriteStates = remember { mutableStateMapOf<String, CurrentWeatherUiState>() }
+    var currentFavoriteKey by remember { mutableStateOf<String?>(null) }
+    var pendingHomeUpdate by remember { mutableStateOf(false) }
 
-    LaunchedEffect(state) {
-        if (pagerState.currentPage == 0 &&
-            !state.isLoading &&
-            state.errorMessage == null &&
-            state.temperatureText != null
-        ) {
-            mainWeatherState = state
+    LaunchedEffect(state, favoriteKeys, pagerState.currentPage, currentFavoriteKey) {
+        val hasData = !state.isLoading && state.errorMessage == null && state.temperatureText != null
+        if (!hasData) return@LaunchedEffect
+
+        when {
+            pagerState.currentPage == 0 || pendingHomeUpdate -> {
+                mainWeatherState = state
+                pendingHomeUpdate = false
+            }
+
+            pagerState.currentPage > 0 -> {
+                val key = currentFavoriteKey ?: favoriteKeys.getOrNull(pagerState.currentPage - 1)
+                if (key != null) cachedFavoriteStates[key] = state
+            }
+        }
+    }
+
+    LaunchedEffect(favoriteKeys) {
+        val allowed = favoriteKeys.toSet()
+        cachedFavoriteStates.keys.toList().forEach { key ->
+            if (key !in allowed) cachedFavoriteStates.remove(key)
+        }
+        if (currentFavoriteKey != null && currentFavoriteKey !in allowed) {
+            currentFavoriteKey = null
         }
     }
 
@@ -112,7 +135,9 @@ fun CurrentWeatherScreen(
             state.temperatureText == null &&
             state.errorMessage == null
         ) {
-            viewModel.loadWeatherForCity(favoriteCities.first())
+            val fav = favoriteCities.first()
+            currentFavoriteKey = fav.key
+            viewModel.loadWeatherForCityCoordinates(fav.title, fav.lat, fav.lon)
         }
     }
 
@@ -129,8 +154,9 @@ fun CurrentWeatherScreen(
                 }
                 if (page == 0) return@collect
 
-                val city = favoriteCities.getOrNull(page - 1) ?: return@collect
-                viewModel.loadWeatherForCity(city)
+                val fav = favoriteCities.getOrNull(page - 1) ?: return@collect
+                currentFavoriteKey = fav.key
+                viewModel.loadWeatherForCityCoordinates(fav.title, fav.lat, fav.lon)
             }
     }
 
@@ -148,7 +174,10 @@ fun CurrentWeatherScreen(
                 onSearchClick = onSearchClick,
                 onFavoritesClick = onFavoritesClick,
                 onSettingsClick = onSettingsClick,
-                onMyLocationClick = onMyLocationClick,
+                onMyLocationClick = {
+                    pendingHomeUpdate = true
+                    onMyLocationClick()
+                },
                 onHomeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                 buttonColor = colors.button,
                 textColor = colors.text
@@ -165,15 +194,20 @@ fun CurrentWeatherScreen(
                     state = state,
                     mainWeatherState = mainWeatherState,
                     pagerState = pagerState,
-                    colors = colors
+                    colors = colors,
+                    favoriteKeys = favoriteKeys,
+                    cachedFavoriteStates = cachedFavoriteStates,
+                    currentFavoriteKey = currentFavoriteKey
                 )
             }
 
-            val hasAnyData = !state.isLoading &&
-                    state.errorMessage == null &&
-                    (state.temperatureText != null || mainWeatherState?.temperatureText != null)
+            val showIndicator = pagerState.pageCount > 1 && (
+                    mainWeatherState?.temperatureText != null ||
+                            cachedFavoriteStates.isNotEmpty() ||
+                            state.temperatureText != null
+                    )
 
-            if (hasAnyData && pagerState.pageCount > 1) {
+            if (showIndicator) {
                 FavoriteCitiesPagerIndicator(
                     pageCount = pagerState.pageCount,
                     currentPage = pagerState.currentPage,
@@ -287,39 +321,56 @@ private fun CurrentWeatherStateContent(
     state: CurrentWeatherUiState,
     mainWeatherState: CurrentWeatherUiState?,
     pagerState: PagerState,
-    colors: UiColors
+    colors: UiColors,
+    favoriteKeys: List<String>,
+    cachedFavoriteStates: Map<String, CurrentWeatherUiState>,
+    currentFavoriteKey: String?
 ) {
-    when {
-        state.isLoading && mainWeatherState == null -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    val hasAnyCachedData =
+        mainWeatherState?.temperatureText != null ||
+                cachedFavoriteStates.isNotEmpty() ||
+                state.temperatureText != null
+
+    if (!hasAnyCachedData) {
+        when {
+            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = colors.text)
             }
-        }
-
-        state.errorMessage != null && mainWeatherState == null -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.errorMessage != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = "Error: ${state.errorMessage}", color = colors.text)
             }
-        }
-
-        state.temperatureText != null || mainWeatherState?.temperatureText != null -> {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                val contentState = if (page == 0) mainWeatherState ?: state else state
-                WeatherCardContent(
-                    state = contentState,
-                    colors = colors,
-                    modifier = Modifier.fillMaxSize()
-                )
+            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = "Find your city", color = colors.text)
             }
         }
+        return
+    }
 
-        else -> {
-            val placeholder = if (pagerState.pageCount <= 1) "Find your city" else "No data"
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = placeholder, color = colors.text)
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize()
+    ) { page ->
+        val pageState: CurrentWeatherUiState? = if (page == 0) {
+            if (pagerState.currentPage == 0) state else mainWeatherState
+        } else {
+            val key = favoriteKeys.getOrNull(page - 1)
+            if (key == null) null
+            else if (pagerState.currentPage == page && currentFavoriteKey == key) state
+            else cachedFavoriteStates[key]
+        }
+
+        when {
+            pageState != null -> WeatherCardContent(
+                state = pageState,
+                colors = colors,
+                modifier = Modifier.fillMaxSize()
+            )
+            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (pagerState.currentPage == page && state.isLoading) {
+                    CircularProgressIndicator(color = colors.text)
+                } else {
+                    Text(text = "No data yet", color = colors.text)
+                }
             }
         }
     }

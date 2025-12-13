@@ -9,6 +9,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.vadim_zinovev.smartweather.data.local.FavoriteCity
 import com.vadim_zinovev.smartweather.data.local.FavoritesStorage
 import com.vadim_zinovev.smartweather.ui.citydetail.CityDetailScreen
 import com.vadim_zinovev.smartweather.ui.citysearch.CitySearchScreen
@@ -62,27 +63,14 @@ fun AppNavHost(
                     backStackEntry.savedStateHandle["selectedLat"] = null
                     backStackEntry.savedStateHandle["selectedLon"] = null
                 }
-            } else if (selectedCityName != null) {
-                LaunchedEffect(selectedCityName) {
-                    currentWeatherViewModel.loadWeatherForCity(selectedCityName)
-                    backStackEntry.savedStateHandle["selectedCityName"] = null
-                }
             }
 
             CurrentWeatherScreen(
                 viewModel = currentWeatherViewModel,
-                onSearchClick = {
-                    navController.navigate(Screen.CitySearch.route)
-                },
-                onSettingsClick = {
-                    navController.navigate(Screen.Settings.route)
-                },
-                onMyLocationClick = {
-                    currentWeatherViewModel.loadWeatherForCurrentLocation()
-                },
-                onFavoritesClick = {
-                    navController.navigate(Screen.Favorites.route)
-                }
+                onSearchClick = { navController.navigate(Screen.CitySearch.route) },
+                onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                onMyLocationClick = { currentWeatherViewModel.loadWeatherForCurrentLocation() },
+                onFavoritesClick = { navController.navigate(Screen.Favorites.route) }
             )
         }
 
@@ -92,7 +80,8 @@ fun AppNavHost(
                     val currentWeatherEntry =
                         navController.getBackStackEntry(Screen.CurrentWeather.route)
 
-                    currentWeatherEntry.savedStateHandle["selectedCityName"] = city.name
+                    currentWeatherEntry.savedStateHandle["selectedCityName"] =
+                        "${city.name}, ${city.country}"
                     currentWeatherEntry.savedStateHandle["selectedLat"] = city.latitude
                     currentWeatherEntry.savedStateHandle["selectedLon"] = city.longitude
 
@@ -100,7 +89,9 @@ fun AppNavHost(
                         route = Screen.CurrentWeather.route,
                         inclusive = false
                     )
-                }
+                },
+                showAddButton = false,
+                onAddFavorite = null
             )
         }
 
@@ -112,31 +103,43 @@ fun AppNavHost(
             CitySearchScreen(
                 onCitySelected = { city ->
                     scope.launch {
-                        favoritesStorage.toggleCity(city.name)
+                        favoritesStorage.add(
+                            FavoriteCity(
+                                name = city.name,
+                                country = city.country,
+                                lat = city.latitude,
+                                lon = city.longitude
+                            )
+                        )
+
+                        val currentWeatherEntry =
+                            navController.getBackStackEntry(Screen.CurrentWeather.route)
+
+                        currentWeatherEntry.savedStateHandle["selectedCityName"] =
+                            "${city.name}, ${city.country}"
+                        currentWeatherEntry.savedStateHandle["selectedLat"] = city.latitude
+                        currentWeatherEntry.savedStateHandle["selectedLon"] = city.longitude
+
+                        navController.popBackStack(
+                            route = Screen.CurrentWeather.route,
+                            inclusive = false
+                        )
                     }
-
-                    val currentWeatherEntry =
-                        navController.getBackStackEntry(Screen.CurrentWeather.route)
-
-                    currentWeatherEntry.savedStateHandle["selectedCityName"] = city.name
-                    currentWeatherEntry.savedStateHandle["selectedLat"] = city.latitude
-                    currentWeatherEntry.savedStateHandle["selectedLon"] = city.longitude
-
-                    navController.popBackStack(
-                        route = Screen.CurrentWeather.route,
-                        inclusive = false
-                    )
-                }
+                },
+                showAddButton = false,
+                onAddFavorite = null
             )
         }
 
         composable(Screen.Favorites.route) {
             FavoritesScreen(
-                onCitySelected = { cityName ->
+                onCitySelected = { city ->
                     val currentWeatherEntry =
                         navController.getBackStackEntry(Screen.CurrentWeather.route)
 
-                    currentWeatherEntry.savedStateHandle["selectedCityName"] = cityName
+                    currentWeatherEntry.savedStateHandle["selectedCityName"] = city.title
+                    currentWeatherEntry.savedStateHandle["selectedLat"] = city.lat
+                    currentWeatherEntry.savedStateHandle["selectedLon"] = city.lon
 
                     navController.popBackStack(
                         route = Screen.CurrentWeather.route,

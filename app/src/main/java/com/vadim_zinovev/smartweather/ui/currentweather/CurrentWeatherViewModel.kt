@@ -11,7 +11,11 @@ import com.vadim_zinovev.smartweather.domain.model.TemperatureUnit
 import com.vadim_zinovev.smartweather.domain.repository.SettingsRepository
 import com.vadim_zinovev.smartweather.domain.repository.WeatherRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 class CurrentWeatherViewModel(
     private val weatherRepository: WeatherRepository,
@@ -61,6 +65,19 @@ class CurrentWeatherViewModel(
         lastLat = latitude
         lastLon = longitude
         reloadWithLastSource(showLoader = true)
+    }
+
+    fun loadWeatherForCoordinates(latitude: Double, longitude: Double) {
+        lastSource = Source.COORDINATES
+        lastCityName = "Saved city"
+        lastLat = latitude
+        lastLon = longitude
+        reloadWeatherByCoordinates(
+            cityName = "Saved city",
+            latitude = latitude,
+            longitude = longitude,
+            showLoader = true
+        )
     }
 
     fun loadWeatherForCurrentLocation() {
@@ -226,9 +243,12 @@ class CurrentWeatherViewModel(
                 val maxTempText = weather.maxTemperature?.let { "${it.toInt()}$unitSymbol" }
                 val windSpeedText = "${weather.windSpeed} m/s"
 
+                val displayCityName =
+                    if (cityName == "My location") (weather.cityName ?: cityName) else cityName
+
                 uiState = uiState.copy(
                     isLoading = false,
-                    cityName = weather.cityName ?: cityName,
+                    cityName = displayCityName,
                     temperatureText = "${weather.temperature.toInt()}$unitSymbol",
                     description = weather.description,
                     airQualityIndex = airQuality?.aqi,
@@ -260,19 +280,20 @@ class CurrentWeatherViewModel(
         val forecastDomain: List<DailyForecast> =
             weatherRepository.getDailyForecast(latitude, longitude, currentUnit)
 
+        val locale = Locale.getDefault()
+
         return forecastDomain
             .take(5)
             .mapIndexed { index, day ->
-                val label = when (index) {
-                    0 -> "Today"
-                    1 -> "Tomorrow"
-                    else -> "Day ${index + 1}"
-                }
+                val label = LocalDate.now()
+                    .plusDays(index.toLong())
+                    .dayOfWeek
+                    .getDisplayName(TextStyle.SHORT, locale)
 
                 DailyForecastUiModel(
                     dayLabel = label,
                     minTemp = "${day.minTemp.toInt()}$unitSymbol",
-                    maxTemp = "${day.maxTemp.toInt()}$unitSymbol",
+                    maxTemp = "${day.maxTemp.toInt()}$unitSymbol"
                 )
             }
     }
